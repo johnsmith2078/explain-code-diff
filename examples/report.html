@@ -1,0 +1,199 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src &#x27;none&#x27;; style-src &#x27;unsafe-inline&#x27;; script-src &#x27;sha256-dZ1fUTu64hqJuET/WaYYPIZB52IW+LsOvKxWr0XvCzA=&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;"><title>示例 · 数量校验的分块 Diff 解读</title><style>:root{color-scheme:light;--bg:#f6f7f9;--panel:#fff;--ink:#18232e;--muted:#657181;--line:#dce2e8;--accent:#265fca;--add:#087d54;--del:#b73d4b;--add-bg:#eaf6ed;--del-bg:#fbecee;--context:#fafbfc}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:94px}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+button,input{font:inherit}button,summary{cursor:pointer}
+button:focus-visible,input:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #73a9fa;outline-offset:3px}
+p{margin:0 0 12px}h1,h2,h3{line-height:1.35}code,pre{font-family:"Cascadia Code","SFMono-Regular",Consolas,monospace}
+aside{position:fixed;inset:0 auto 0 0;width:240px;padding:26px 20px;overflow:auto;background:#142335;color:#d6e2ef;display:flex;flex-direction:column}
+aside a{color:inherit}
+.brand{display:flex;align-items:center;gap:10px;color:#fff;letter-spacing:.09em;font-size:14px;font-weight:750}
+.brand-icon{display:grid;place-items:center;width:30px;height:32px;border:1px solid #68788a;border-radius:8px;font-size:25px}
+.nav-label{font-size:11px;letter-spacing:.18em;color:#91a7bd;margin:40px 0 14px}
+.nav-group{font-size:11px;color:#a8bcd0;margin:18px 0 8px}
+.file-link{display:flex;flex-direction:column;padding:10px 12px;border-radius:6px;font-size:13px;overflow-wrap:anywhere;margin:3px 0}
+.file-link:hover{background:#253a50;text-decoration:none}
+.file-link small{font-size:11px;color:#8fa5ba}
+.aside-note{margin-top:auto;padding-top:40px;color:#8fa5ba;font-size:11px}
+main{margin-left:240px;padding:36px 34px 20px}
+header{margin-bottom:26px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--muted);margin-bottom:12px}
+h1{font-size:clamp(25px,2.5vw,34px);letter-spacing:-.035em;margin:8px 0 18px}
+.lead{font-size:15px;color:#4c5a6a;max-width:1100px}
+.metrics{display:flex;gap:44px;margin:26px 0 12px}
+.metrics div{display:flex;flex-direction:column}
+.metrics b{font-size:28px;line-height:1.3;letter-spacing:-.03em}
+.metrics span{font-size:11px;color:var(--muted);margin-top:5px}
+.plus{color:var(--add)}.minus{color:var(--del)}
+.coverage-note{font-size:11px;color:var(--muted)}
+.impact-summary{padding:18px 22px;background:#eaf0fb;border-left:3px solid #6388d1;margin:22px 0 16px;border-radius:0 6px 6px 0}
+.impact-summary p:last-child{margin:6px 0 0}
+.provenance{font-size:12px;color:var(--muted);margin:12px 0 20px}
+.provenance summary{display:list-item}
+.provenance dl{display:grid;grid-template-columns:90px 1fr;gap:7px;margin:14px 0}
+.provenance dd{margin:0;overflow-wrap:anywhere}
+.provenance pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.warnings{padding:14px 20px 14px 36px;background:#fffbef;font-size:12px;border:1px solid #ebdfb7;border-radius:6px}
+.controls{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 0;background:var(--bg);border-bottom:1px solid var(--line);margin-bottom:30px;font-size:12px}
+.controls input[type=search]{flex:1;min-width:170px;max-width:310px;border:1px solid #b8c4d0;border-radius:6px;padding:7px 10px;color:var(--ink);background:var(--panel)}
+.controls button{padding:7px 10px;border:1px solid #cbd4dd;border-radius:5px;color:var(--ink);background:var(--panel);font-size:12px}
+.controls button:hover{border-color:var(--accent);color:var(--accent)}
+.check{display:flex;gap:5px;align-items:center;white-space:nowrap}
+#search-count{margin-left:auto;color:var(--muted);font-size:11px}
+.scope-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.scope-title h2{font-size:18px;margin:0}.scope-title>span{font-size:12px;color:var(--muted)}
+.scope{margin-bottom:38px}
+.file{margin-bottom:24px;border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden;scroll-margin-top:86px}
+.file-title{padding:16px 20px;font-weight:650;background:var(--panel);border-bottom:1px solid transparent;font-size:14px}
+.file[open]>.file-title{border-bottom-color:var(--line)}
+.file-path{overflow-wrap:anywhere}
+.file-count{float:right;font:12px/1.8 "Cascadia Code",Consolas,monospace;margin-left:16px}
+.file-overview{padding:18px 22px;font-size:13px}
+.file-overview p,.block-annotation p{display:grid;grid-template-columns:3.4em minmax(0,1fr);gap:8px;margin:7px 0;white-space:pre-wrap}
+.file-overview strong,.block-annotation p>strong{font-size:11px;color:var(--muted);font-weight:650;padding-top:1px}
+.file-overview .eyebrow{font-size:10px;letter-spacing:.035em}
+.badge{display:inline-block;white-space:nowrap;border-radius:4px;font-size:10px;line-height:1.7;padding:1px 6px;background:#edf1f5;color:#536476;font-weight:600}
+.documented,.passed{background:#e3f4eb;color:#147350}.inferred{background:#eaf0fb;color:#335e9a}.unknown,.not_run{background:#fff1ce;color:#84631f}.failed{background:#ffebed;color:#a63342}
+.reason>.badge{margin:8px 0 0 calc(3.4em + 8px)}
+.evidence{color:var(--muted);font-size:11px;margin:6px 0 10px calc(3.4em + 8px)}
+.evidence summary{display:list-item}
+.evidence ul{padding-left:18px;margin:6px 0;overflow-wrap:anywhere}
+.diff-block{border-top:1px solid var(--line);scroll-margin-top:88px}
+.block-heading{display:flex;align-items:baseline;gap:20px;padding:10px 18px;background:#edf2f9;font-size:11px;color:#59758f}
+.block-heading a{white-space:nowrap;font-weight:700}
+.block-heading code{overflow-wrap:anywhere}
+.table-wrap{overflow-x:auto}
+.diff-table{border-collapse:collapse;width:100%;table-layout:fixed;min-width:720px;font-size:12px}
+.line-col{width:46px}.code-col{width:calc(50% - 46px)}
+.diff-table th{text-align:left;padding:10px 16px;font-size:11px;font-weight:500;border-bottom:1px solid var(--line)}
+.diff-table th strong{margin-right:14px;font-size:11px}
+.diff-table th span{font-family:"Cascadia Code",Consolas,monospace;overflow-wrap:anywhere;color:var(--muted)}
+.before-heading{background:#fff7f7;border-right:2px solid #cdd4dc;color:var(--del)}
+.after-heading{background:#f3faf5;color:var(--add)}
+.diff-table td{vertical-align:top}
+.diff-table .ln{padding:3px 8px 3px 4px;text-align:right;font:11px/1.9 "Cascadia Code",Consolas,monospace;color:#7f8c98;background:var(--context);user-select:none}
+.ln a{color:inherit}
+.diff-table .code{position:relative;padding:3px 12px 3px 25px}
+.code.old{border-right:2px solid #cdd4dc}
+.code pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font-size:12px;line-height:1.75;tab-size:4;margin:0;min-height:21px}
+.sign{position:absolute;left:9px;font:13px/1.6 Consolas,monospace;color:var(--muted);user-select:none}
+.code.add,.ln.add{background:var(--add-bg)}
+.code.delete,.ln.delete{background:var(--del-bg)}
+.add .sign{color:var(--add)}.delete .sign{color:var(--del)}
+.code.context{color:#647180}
+.code.placeholder{background:repeating-linear-gradient(135deg,#f3f4f6,#f3f4f6 3px,#e9edf1 3px,#e9edf1 4px)}
+.ln.placeholder{background:#f0f2f5}
+mark.intraline{color:inherit;border-radius:2px;padding:0}
+mark.intraline.delete{background:#efb7bd}
+mark.intraline.add{background:#b8e5c4}
+.no-newline{display:block;font:10px/1.5 sans-serif;color:#8c6a2e;margin:4px 0}
+.block-annotation{padding:18px 22px 22px;border-top:1px solid var(--line);background:#fbfcfe;font-size:13px;line-height:1.8;overflow-wrap:anywhere}
+.annotation-heading{font-size:11px;font-weight:700;letter-spacing:.12em;color:#355d87;margin-bottom:10px}
+.block-annotation .risk span{color:#966123}
+.raw{padding:13px 20px;color:var(--muted);font-size:11px;border-top:1px solid var(--line)}
+.raw pre{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink);font-size:11px}
+.notice,.empty{padding:16px 22px;color:var(--muted);font-size:13px}
+.hide-context .diff-row.context{display:none}
+.code:target{box-shadow:inset 0 2px #5182d1,inset 0 -2px #5182d1}
+.diff-block:target>.block-heading{background:#dae8fb}
+.review-notes{border-top:1px solid var(--line);padding:26px 0}
+.review-notes h2{font-size:20px}.review-notes h3{font-size:14px}
+.review-grid{display:grid;grid-template-columns:1fr 1fr;gap:30px;font-size:13px}
+.review-grid ul{padding-left:20px}
+.checks{list-style:none;padding-left:0!important}.checks li{margin:0 0 18px}
+.checks strong{font-size:12px;margin-left:7px}
+.checks p{font-size:12px;color:var(--muted);margin-top:8px;white-space:pre-wrap}
+footer{font-size:11px;color:var(--muted);border-top:1px solid var(--line);padding:20px 0}
+.sr-only,.skip-link:not(:focus){position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.skip-link:focus{position:fixed;z-index:20;top:12px;left:12px;background:white;padding:10px 16px}
+[hidden]{display:none!important}
+@media(max-width:1150px){aside{width:200px;padding:22px 16px}main{margin-left:200px;padding:30px 24px 12px}.metrics{gap:28px}.controls{gap:9px}}
+@media(max-width:800px){aside{position:static;width:auto;padding:18px 20px}aside nav,aside .nav-label,.aside-note{display:none}main{margin-left:0;padding:24px 16px}.metrics{gap:22px}.metrics b{font-size:23px}.controls{position:static}.file-title{padding:15px 14px}.file-count{float:none;display:block;margin:7px 0 0 16px}.file-overview,.block-annotation{padding:18px 16px}.review-grid{grid-template-columns:1fr;gap:10px}.block-heading{padding:10px 14px;gap:12px}}
+@media print{aside,.controls,.raw,.skip-link,#no-results{display:none!important}main{margin:0;padding:0}body{background:#fff;font-size:11px}.file{overflow:visible;border-radius:0;break-inside:auto}.file-title,.scope-title,.block-heading,h2,h3{break-after:avoid}.diff-row{break-inside:avoid}.block-annotation{break-inside:avoid}.table-wrap{overflow:visible}.diff-table{min-width:0;font-size:10px}.code pre{font-size:9px;min-height:16px}.line-col{width:30px}.code-col{width:calc(50% - 30px)}.diff-table .ln{font-size:8px}.diff-table .code{padding-left:18px}.sign{left:5px;font-size:10px}.metrics{margin:18px 0}.file-overview,.block-annotation{padding:12px;font-size:10px}.provenance{font-size:9px}a{color:inherit}.file[hidden],.scope[hidden]{display:block!important}.hide-context .diff-row.context{display:table-row}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body><a class="skip-link" href="#main">跳至报告正文</a><aside><a class="brand" href="#main"><span class="brand-icon">±</span> DIFF / 解读</a><p class="nav-label">文件索引</p><nav aria-label="文件导航"><div class="nav-group">提交：父提交 1 → commit</div><a class="file-link" href="#s1-f1" data-target="s1-f1"><span>quantity.py</span><small>+6 / −2</small></a><a class="file-link" href="#s1-f2" data-target="s1-f2"><span>test_quantity.py</span><small>+7 / −0</small></a></nav><p class="aside-note">离线报告<br>Diff 块覆盖已校验</p></aside><main id="main"><header><p class="eyebrow">CODE CHANGE EXPLAINED</p><h1>示例 · 数量校验的分块 Diff 解读</h1><p class="lead">这份示例报告将 15 条增删行组织为 2 个 Diff 块。每块左侧为旧版、右侧为新版代码，下方集中解释该块的变化、原因与影响。</p><div class="metrics"><div><b>2</b><span>文件条目</span></div><div><b class="plus">+13</b><span>新增行</span></div><div><b class="minus">−2</b><span>删除行</span></div><div><b>2/2</b><span>已解释 Diff 块</span></div></div><p class="coverage-note">每个 Diff 块均有完整说明。左侧为修改前，右侧为修改后；语义判断及推断仍需结合依据审阅。</p><div class="impact-summary"><span class="eyebrow">影响概览</span><p>normalize_quantity(None) 仍返回默认值 1；normalize_quantity(0) 从 1 改为 0；normalize_quantity(-1) 从返回 -1 改为抛出 ValueError。正数输入的返回值保持一致。</p></div><details class="provenance"><summary>快照信息</summary><dl><dt>仓库</dt><dd>example/quantity-demo</dd><dt>采集时间</dt><dd>2026-10-27T11:37:03.533606+00:00（UTC）</dd><dt>快照指纹</dt><dd><code>3d5e7a91189941f73be5d8b95f10a5230e80eee3254837bd415212ed802742ee</code></dd><dt>文本编码</dt><dd>utf-8</dd><dt>范围</dt><dd>仓库全部路径</dd></dl></details></header><div class="controls"><label for="search">搜索</label><input id="search" type="search" placeholder="文件、代码或解释…" autocomplete="off"><label class="check"><input id="context-toggle" type="checkbox">隐藏上下文</label><button type="button" id="expand-all">展开全部</button><button type="button" id="collapse-all">折叠全部</button><button type="button" id="print-report">打印 / PDF</button><span id="search-count" aria-live="polite">2 个文件条目</span></div><p id="no-results" class="empty" hidden>没有匹配的文件、代码或说明。</p><section class="scope" id="s1"><div class="scope-title"><h2>提交：父提交 1 → commit</h2><span>2 个文件条目</span></div><details class="provenance"><summary>比较基准与提交信息</summary><dl><dt>旧版本</dt><dd><code>16b2055b889e0a355778db3681ef05344007c8a9</code></dd><dt>新版本</dt><dd><code>fbec3e691f406580b479dc8c4237e7caa94c23ea</code></dd></dl><pre>Preserve explicit zero and reject negative quantities</pre></details><details class="file" id="s1-f1" open><summary class="file-title"><span class="file-path">quantity.py</span><span class="file-count"><b class="plus">+6</b> <b class="minus">−2</b> <span class="badge">M</span></span></summary><div class="file-overview"><div class="eyebrow">提交：父提交 1 → commit · 文本 · 模式 100644 → 100644</div><p class=""><strong>文件作用</strong><span>定义数量的缺省处理与负数校验规则。</span></p><div class="reason"><span class="badge documented">有直接依据</span><p class=""><strong>原因</strong><span>示例提交明确要求保留显式零并拒绝负数。</span></p><details class="evidence"><summary>依据</summary><ul><li>commit fbec3e691f406580b479dc8c4237e7caa94c23ea: Preserve explicit zero and reject negative quantities</li></ul></details></div><p class=""><strong>整体影响</strong><span>normalize_quantity(None) 仍返回默认值 1；normalize_quantity(0) 从 1 改为 0；normalize_quantity(-1) 从返回 -1 改为抛出 ValueError。正数输入的返回值保持一致。</span></p></div><section class="diff-block" id="s1-f1-h1"><div class="block-heading"><a href="#s1-f1-h1">Diff 块 1</a><code>@@ -1,3 +1,7 @@</code></div><div class="table-wrap"><table class="diff-table"><caption class="sr-only">quantity.py 的第 1 个差异块：左侧修改前，右侧修改后</caption><colgroup><col class="line-col"><col class="code-col"><col class="line-col"><col class="code-col"></colgroup><thead><tr><th colspan="2" scope="colgroup" class="before-heading"><strong>修改前</strong><span>quantity.py</span></th><th colspan="2" scope="colgroup" class="after-heading"><strong>修改后</strong><span>quantity.py</span></th></tr></thead><tbody><tr class="diff-row context"><td class="ln old context"><a href="#s1-f1-h1-l1">1</a></td><td id="s1-f1-h1-l1" class="code old context" data-source-id="s1-f1-h1-l1" data-side="old" data-line="1"><span class="sign" aria-label="context"> </span><pre>def normalize_quantity(value, default=1):</pre></td><td class="ln new context"><a href="#s1-f1-h1-l1-new">1</a></td><td id="s1-f1-h1-l1-new" class="code new context" data-source-id="s1-f1-h1-l1" data-side="new" data-line="1"><span class="sign" aria-label="context"> </span><pre>def normalize_quantity(value, default=1):</pre></td></tr><tr class="diff-row changed"><td class="ln old delete"><a href="#s1-f1-h1-l2">2</a></td><td id="s1-f1-h1-l2" class="code old delete" data-source-id="s1-f1-h1-l2" data-side="old" data-line="2"><span class="sign" aria-label="delete">−</span><pre>    &quot;&quot;&quot;<mark class="intraline delete">R</mark>e<mark class="intraline delete">tur</mark>n <mark class="intraline delete">a r</mark>e<mark class="intraline delete">quested </mark>ite<mark class="intraline delete">m</mark> <mark class="intraline delete">q</mark>uan<mark class="intraline delete">tit</mark>y.&quot;&quot;&quot;</pre></td><td class="ln new add"><a href="#s1-f1-h1-l4">2</a></td><td id="s1-f1-h1-l4" class="code new add" data-source-id="s1-f1-h1-l4" data-side="new" data-line="2"><span class="sign" aria-label="add">+</span><pre>    &quot;&quot;&quot;<mark class="intraline add">K</mark>e<mark class="intraline add">ep a</mark>n e<mark class="intraline add">xplic</mark>it<mark class="intraline add"> z</mark>e<mark class="intraline add">ro;</mark> u<mark class="intraline add">se def</mark>a<mark class="intraline add">ult o</mark>n<mark class="intraline add">l</mark>y<mark class="intraline add"> for None</mark>.&quot;&quot;&quot;</pre></td></tr><tr class="diff-row changed"><td class="ln old delete"><a href="#s1-f1-h1-l3">3</a></td><td id="s1-f1-h1-l3" class="code old delete" data-source-id="s1-f1-h1-l3" data-side="old" data-line="3"><span class="sign" aria-label="delete">−</span><pre>    <mark class="intraline delete">return</mark> value o<mark class="intraline delete">r d</mark>e<mark class="intraline delete">fault</mark></pre></td><td class="ln new add"><a href="#s1-f1-h1-l5">3</a></td><td id="s1-f1-h1-l5" class="code new add" data-source-id="s1-f1-h1-l5" data-side="new" data-line="3"><span class="sign" aria-label="add">+</span><pre>    <mark class="intraline add">if</mark> value <mark class="intraline add">is N</mark>o<mark class="intraline add">n</mark>e<mark class="intraline add">:</mark></pre></td></tr><tr class="diff-row changed"><td class="ln placeholder old" aria-hidden="true"></td><td class="code placeholder old" aria-label="此侧无对应行"></td><td class="ln new add"><a href="#s1-f1-h1-l6">4</a></td><td id="s1-f1-h1-l6" class="code new add" data-source-id="s1-f1-h1-l6" data-side="new" data-line="4"><span class="sign" aria-label="add">+</span><pre>        return default</pre></td></tr><tr class="diff-row changed"><td class="ln placeholder old" aria-hidden="true"></td><td class="code placeholder old" aria-label="此侧无对应行"></td><td class="ln new add"><a href="#s1-f1-h1-l7">5</a></td><td id="s1-f1-h1-l7" class="code new add" data-source-id="s1-f1-h1-l7" data-side="new" data-line="5"><span class="sign" aria-label="add">+</span><pre>    if value &lt; 0:</pre></td></tr><tr class="diff-row changed"><td class="ln placeholder old" aria-hidden="true"></td><td class="code placeholder old" aria-label="此侧无对应行"></td><td class="ln new add"><a href="#s1-f1-h1-l8">6</a></td><td id="s1-f1-h1-l8" class="code new add" data-source-id="s1-f1-h1-l8" data-side="new" data-line="6"><span class="sign" aria-label="add">+</span><pre>        raise ValueError(&quot;quantity must be non-negative&quot;)</pre></td></tr><tr class="diff-row changed"><td class="ln placeholder old" aria-hidden="true"></td><td class="code placeholder old" aria-label="此侧无对应行"></td><td class="ln new add"><a href="#s1-f1-h1-l9">7</a></td><td id="s1-f1-h1-l9" class="code new add" data-source-id="s1-f1-h1-l9" data-side="new" data-line="7"><span class="sign" aria-label="add">+</span><pre>    return value</pre></td></tr></tbody></table></div><div class="block-annotation"><div class="annotation-heading">本块解读</div><p class=""><strong>改动</strong><span>1. 将 value or default 替换为显式的 None 分支，仅缺省输入返回 default，其他值走最终的原样返回路径。
+2. 在返回前增加负数检查，对 value &lt; 0 抛出 ValueError。
+3. 更新文档字符串，说明显式零与 None 的区别。</span></p><div class="reason"><span class="badge documented">有直接依据</span><p class=""><strong>原因</strong><span>提交信息明确要求保留显式零并拒绝负数。旧表达式把 0 当作假值，会返回默认值；同时它直接接受负数。新的分支结构分别落实这两个行为要求。</span></p><details class="evidence"><summary>依据</summary><ul><li>commit fbec3e691f406580b479dc8c4237e7caa94c23ea: Preserve explicit zero and reject negative quantities</li><li>旧版本 quantity.py:3；目标版本 quantity.py:2–7</li><li>目标版本 test_quantity.py 中的零值与负数用例</li></ul></details></div><p class=""><strong>影响</strong><span>None 输入仍返回默认值 1；0 从返回 1 改为返回 0；-1 从返回 -1 改为抛出 ValueError。正数仍返回自身。文档字符串变化没有运行时影响。</span></p><p class="risk"><strong>风险</strong><span>调用方需要处理新的 ValueError。空字符串会在比较时触发 TypeError，False 会原样返回；这些输入此前会走默认值路径。None 分支仍未校验自定义 default 是否为负数。</span></p><p class=""><strong>验证</strong><span>已执行 python -m unittest -v：缺省、零值和负数共 3 个测试均通过。其他输入类型与自定义默认值未测试。</span></p></div></section><details class="raw"><summary>查看原始 patch</summary><pre>diff --git a/quantity.py b/quantity.py
+index c21613376807f0bcadac8a70c098e845e6f3adfe..6ac365a44c9a9f3b0f81f9a8dbbd81847850844e 100644
+--- a/quantity.py
++++ b/quantity.py
+@@ -1,3 +1,7 @@
+ def normalize_quantity(value, default=1):
+-    &quot;&quot;&quot;Return a requested item quantity.&quot;&quot;&quot;
+-    return value or default
++    &quot;&quot;&quot;Keep an explicit zero; use default only for None.&quot;&quot;&quot;
++    if value is None:
++        return default
++    if value &lt; 0:
++        raise ValueError(&quot;quantity must be non-negative&quot;)
++    return value
+</pre></details></details><details class="file" id="s1-f2" open><summary class="file-title"><span class="file-path">test_quantity.py</span><span class="file-count"><b class="plus">+7</b> <b class="minus">−0</b> <span class="badge">M</span></span></summary><div class="file-overview"><div class="eyebrow">提交：父提交 1 → commit · 文本 · 模式 100644 → 100644</div><p class=""><strong>文件作用</strong><span>为零值与负数增加回归测试，保留原有缺省值用例。</span></p><div class="reason"><span class="badge documented">有直接依据</span><p class=""><strong>原因</strong><span>示例提交明确要求保留显式零并拒绝负数。</span></p><details class="evidence"><summary>依据</summary><ul><li>commit fbec3e691f406580b479dc8c4237e7caa94c23ea: Preserve explicit zero and reject negative quantities</li></ul></details></div><p class=""><strong>整体影响</strong><span>测试套件从 1 个用例增加到 3 个，覆盖此次功能变化的两个关键边界。</span></p></div><section class="diff-block" id="s1-f2-h1"><div class="block-heading"><a href="#s1-f2-h1">Diff 块 1</a><code>@@ -5,3 +5,10 @@ from quantity import normalize_quantity</code></div><div class="table-wrap"><table class="diff-table"><caption class="sr-only">test_quantity.py 的第 1 个差异块：左侧修改前，右侧修改后</caption><colgroup><col class="line-col"><col class="code-col"><col class="line-col"><col class="code-col"></colgroup><thead><tr><th colspan="2" scope="colgroup" class="before-heading"><strong>修改前</strong><span>test_quantity.py</span></th><th colspan="2" scope="colgroup" class="after-heading"><strong>修改后</strong><span>test_quantity.py</span></th></tr></thead><tbody><tr class="diff-row context"><td class="ln old context"><a href="#s1-f2-h1-l1">5</a></td><td id="s1-f2-h1-l1" class="code old context" data-source-id="s1-f2-h1-l1" data-side="old" data-line="5"><span class="sign" aria-label="context"> </span><pre>class QuantityTests(unittest.TestCase):</pre></td><td class="ln new context"><a href="#s1-f2-h1-l1-new">5</a></td><td id="s1-f2-h1-l1-new" class="code new context" data-source-id="s1-f2-h1-l1" data-side="new" data-line="5"><span class="sign" aria-label="context"> </span><pre>class QuantityTests(unittest.TestCase):</pre></td></tr><tr class="diff-row context"><td class="ln old context"><a href="#s1-f2-h1-l2">6</a></td><td id="s1-f2-h1-l2" class="code old context" data-source-id="s1-f2-h1-l2" data-side="old" data-line="6"><span class="sign" aria-label="context"> </span><pre>    def test_missing_value_uses_default(self):</pre></td><td class="ln new context"><a href="#s1-f2-h1-l2-new">6</a></td><td id="s1-f2-h1-l2-new" class="code new context" data-source-id="s1-f2-h1-l2" data-side="new" data-line="6"><span class="sign" aria-label="context"> </span><pre>    def test_missing_value_uses_default(self):</pre></td></tr><tr class="diff-row context"><td class="ln old context"><a href="#s1-f2-h1-l3">7</a></td><td id="s1-f2-h1-l3" class="code old context" data-source-id="s1-f2-h1-l3" data-side="old" data-line="7"><span class="sign" aria-label="context"> </span><pre>        self.assertEqual(normalize_quantity(None), 1)</pre></td><td class="ln new context"><a href="#s1-f2-h1-l3-new">7</a></td><td id="s1-f2-h1-l3-new" class="code new context" data-source-id="s1-f2-h1-l3" data-side="new" data-line="7"><span class="sign" aria-label="context"> </span><pre>        self.assertEqual(normalize_quantity(None), 1)</pre></td></tr><tr class="diff-row changed"><td class="ln placeholder old" aria-hidden="true"></td><td class="code placeholder old" aria-label="此侧无对应行"></td><td class="ln new add"><a href="#s1-f2-h1-l4">8</a></td><td id="s1-f2-h1-l4" class="code new add" data-source-id="s1-f2-h1-l4" data-side="new" data-line="8"><span class="sign" aria-label="add">+</span><pre></pre></td></tr><tr class="diff-row changed"><td class="ln placeholder old" aria-hidden="true"></td><td class="code placeholder old" aria-label="此侧无对应行"></td><td class="ln new add"><a href="#s1-f2-h1-l5">9</a></td><td id="s1-f2-h1-l5" class="code new add" data-source-id="s1-f2-h1-l5" data-side="new" data-line="9"><span class="sign" aria-label="add">+</span><pre>    def test_zero_is_preserved(self):</pre></td></tr><tr class="diff-row changed"><td class="ln placeholder old" aria-hidden="true"></td><td class="code placeholder old" aria-label="此侧无对应行"></td><td class="ln new add"><a href="#s1-f2-h1-l6">10</a></td><td id="s1-f2-h1-l6" class="code new add" data-source-id="s1-f2-h1-l6" data-side="new" data-line="10"><span class="sign" aria-label="add">+</span><pre>        self.assertEqual(normalize_quantity(0), 0)</pre></td></tr><tr class="diff-row changed"><td class="ln placeholder old" aria-hidden="true"></td><td class="code placeholder old" aria-label="此侧无对应行"></td><td class="ln new add"><a href="#s1-f2-h1-l7">11</a></td><td id="s1-f2-h1-l7" class="code new add" data-source-id="s1-f2-h1-l7" data-side="new" data-line="11"><span class="sign" aria-label="add">+</span><pre></pre></td></tr><tr class="diff-row changed"><td class="ln placeholder old" aria-hidden="true"></td><td class="code placeholder old" aria-label="此侧无对应行"></td><td class="ln new add"><a href="#s1-f2-h1-l8">12</a></td><td id="s1-f2-h1-l8" class="code new add" data-source-id="s1-f2-h1-l8" data-side="new" data-line="12"><span class="sign" aria-label="add">+</span><pre>    def test_negative_is_rejected(self):</pre></td></tr><tr class="diff-row changed"><td class="ln placeholder old" aria-hidden="true"></td><td class="code placeholder old" aria-label="此侧无对应行"></td><td class="ln new add"><a href="#s1-f2-h1-l9">13</a></td><td id="s1-f2-h1-l9" class="code new add" data-source-id="s1-f2-h1-l9" data-side="new" data-line="13"><span class="sign" aria-label="add">+</span><pre>        with self.assertRaises(ValueError):</pre></td></tr><tr class="diff-row changed"><td class="ln placeholder old" aria-hidden="true"></td><td class="code placeholder old" aria-label="此侧无对应行"></td><td class="ln new add"><a href="#s1-f2-h1-l10">14</a></td><td id="s1-f2-h1-l10" class="code new add" data-source-id="s1-f2-h1-l10" data-side="new" data-line="14"><span class="sign" aria-label="add">+</span><pre>            normalize_quantity(-1)</pre></td></tr></tbody></table></div><div class="block-annotation"><div class="annotation-heading">本块解读</div><p class=""><strong>改动</strong><span>新增两个 unittest 方法：test_zero_is_preserved 断言 0 的结果等于 0；test_negative_is_rejected 在 assertRaises(ValueError) 块内以 -1 调用函数。新增空行用于分隔测试方法。</span></p><div class="reason"><span class="badge inferred">根据代码推断</span><p class=""><strong>原因</strong><span>根据测试名称和断言，推测这些用例用于防止两类回归：显式零再次被默认值替换，以及负数继续被正常返回。两条断言都能区分本次修改前后的行为。</span></p><details class="evidence"><summary>依据</summary><ul><li>目标版本 test_quantity.py:9–14</li><li>旧实现 quantity.py:3 会把 0 变为 1，并直接返回 -1</li></ul></details></div><p class=""><strong>影响</strong><span>旧实现会使这两个新用例失败；新实现通过。该块只增加验证，不改变生产代码的运行路径；测试方法之间的空行只影响可读性。</span></p><p class="risk"><strong>风险</strong><span>assertEqual 只比较数值相等，不校验严格返回类型；assertRaises 只约束异常类型，没有检查异常消息。测试不覆盖其他负数类型或非数值输入。</span></p><p class=""><strong>验证</strong><span>已实际运行 unittest：两个新增用例和原有缺省值用例均通过。</span></p></div></section><details class="raw"><summary>查看原始 patch</summary><pre>diff --git a/test_quantity.py b/test_quantity.py
+index 3ae9af28d3e1a36297a7bc668cfb3e36a983e66e..b6fb359152cb3ba2e3a4550a1f6f62292e7c009a 100644
+--- a/test_quantity.py
++++ b/test_quantity.py
+@@ -5,3 +5,10 @@ from quantity import normalize_quantity
+ class QuantityTests(unittest.TestCase):
+     def test_missing_value_uses_default(self):
+         self.assertEqual(normalize_quantity(None), 1)
++
++    def test_zero_is_preserved(self):
++        self.assertEqual(normalize_quantity(0), 0)
++
++    def test_negative_is_rejected(self):
++        with self.assertRaises(ValueError):
++            normalize_quantity(-1)
+</pre></details></details></section><section class="review-notes"><h2>风险与验证</h2><div class="review-grid"><div><h3>风险与待确认项</h3><ul><li>负数现在抛出异常。依赖旧行为的调用方需要处理 ValueError。</li><li>空字符串现在会在与 0 比较时触发 TypeError，False 会原样返回；此前这两者都会采用默认值。示例未定义或测试这些类型的契约。</li><li>默认值 default 本身没有经过非负校验，value 为 None 时会直接返回它。</li></ul></div><div><h3>验证记录</h3><ul class="checks"><li><span class="badge passed">已通过</span><strong>运行示例单元测试</strong><p>在示例仓库执行 python -m unittest -v：3 个测试全部通过（缺省值、显式零、负数）。</p></li><li><span class="badge not_run">未执行</span><strong>其他调用方与输入类型</strong><p>示例仓库没有业务调用方；未测试空字符串、False、自定义对象或自定义默认值。</p></li></ul></div></div></section><footer>本报告对应采集时的快照。来源说明、代码事实与改动动机应分别核对。</footer></main><script>(() => {
+  "use strict";
+  const files = Array.from(document.querySelectorAll("details.file"));
+  const search = document.getElementById("search");
+  const count = document.getElementById("search-count");
+  const indexed = files.map(file => ({file, text: file.textContent.toLocaleLowerCase()}));
+  search.addEventListener("input", () => {
+    const query = search.value.trim().toLocaleLowerCase();
+    let visible = 0;
+    indexed.forEach(({file, text}) => {
+      const matches = !query || text.includes(query);
+      file.hidden = !matches;
+      const link = document.querySelector('[data-target="' + file.id + '"]');
+      if (link) link.hidden = !matches;
+      if (matches) {
+        visible += 1;
+        if (query) file.open = true;
+      }
+    });
+    document.querySelectorAll(".scope").forEach(scope => {
+      scope.hidden = Boolean(query) && !Array.from(scope.querySelectorAll(".file")).some(file => !file.hidden);
+    });
+    count.textContent = visible + " / " + files.length + " 个文件条目";
+    document.getElementById("no-results").hidden = visible !== 0 || !query;
+  });
+  document.getElementById("context-toggle").addEventListener("change", event => {
+    document.body.classList.toggle("hide-context", event.target.checked);
+  });
+  document.getElementById("expand-all").addEventListener("click", () => files.forEach(file => { file.open = true; }));
+  document.getElementById("collapse-all").addEventListener("click", () => files.forEach(file => { file.open = false; }));
+  document.getElementById("print-report").addEventListener("click", () => window.print());
+  document.querySelectorAll(".file-link").forEach(link => {
+    link.addEventListener("click", () => { document.getElementById(link.dataset.target).open = true; });
+  });
+  function revealAnchor() {
+    let id;
+    try { id = decodeURIComponent(location.hash.slice(1)); } catch (_) { return; }
+    const node = document.getElementById(id);
+    const file = node && node.closest("details.file");
+    if (file) {
+      file.open = true;
+      file.hidden = false;
+      file.closest(".scope").hidden = false;
+    }
+  }
+  window.addEventListener("hashchange", revealAnchor);
+  revealAnchor();
+  let printState = [];
+  window.addEventListener("beforeprint", () => {
+    printState = Array.from(document.querySelectorAll("details")).map(node => [node, node.open]);
+    printState.forEach(([node]) => { node.open = true; });
+  });
+  window.addEventListener("afterprint", () => printState.forEach(([node, open]) => { node.open = open; }));
+})();
+</script></body></html>
